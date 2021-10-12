@@ -158,6 +158,10 @@ Resources:
               command: systemctl enable cfn-hup.service
             02_start_cfn_hup:
               command: systemctl start cfn-hup.service
+            03_install_java:
+              command: apt-get --yes install openjdk-16-jre-headless
+            04_download_geyser:
+              command: wget https://ci.opencollab.dev/job/GeyserMC/job/Geyser/job/master/lastSuccessfulBuild/artifact/bootstrap/standalone/target/Geyser.jar -O /opt/geyser/Geyser.jar
           files:
             /etc/cfn/cfn-hup.conf:
               content: !Sub |
@@ -178,6 +182,17 @@ Resources:
                 Restart=always
                 [Install]
                 WantedBy=multi-user.target
+              mode: '000644'
+              owner: root
+              group: root
+            /opt/geyser/run.sh:
+              content: !Sub |
+                #!/bin/sh
+                cd "$( dirname "$0" )"
+                java -Xms1024M -jar Geyser.jar
+              mode: '000744'
+              owner: root
+              group: root
 
 Outputs:
   ProxyInstanceId:
