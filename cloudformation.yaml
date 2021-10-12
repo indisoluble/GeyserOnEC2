@@ -162,6 +162,10 @@ Resources:
               command: apt-get --yes install openjdk-16-jre-headless
             04_download_geyser:
               command: wget https://ci.opencollab.dev/job/GeyserMC/job/Geyser/job/master/lastSuccessfulBuild/artifact/bootstrap/standalone/target/Geyser.jar -O /opt/geyser/Geyser.jar
+            05_enable_geyser:
+              command: systemctl enable geyser.service
+            06_start_geyser:
+              command: systemctl start geyser.service
           files:
             /etc/cfn/cfn-hup.conf:
               content: !Sub |
@@ -179,6 +183,19 @@ Resources:
                 [Service]
                 Type=simple
                 ExecStart=/opt/aws/bin/cfn-hup
+                Restart=always
+                [Install]
+                WantedBy=multi-user.target
+              mode: '000644'
+              owner: root
+              group: root
+            /lib/systemd/system/geyser.service:
+              content: !Sub |
+                [Unit]
+                Description=GeyserMC daemon
+                [Service]
+                Type=simple
+                ExecStart=/opt/geyser/run.sh
                 Restart=always
                 [Install]
                 WantedBy=multi-user.target
