@@ -7,10 +7,24 @@ Parameters:
     Description: Subnet IP range
     Type: String
     Default: 10.0.0.0/28
+  ClientIP:
+    Description: Client IP
+    Type: String
+  GeyserPort:
+    Description: Proxy port
+    Type: Number
+    Default: 19132
   InstanceType:
     Description: EC2 instance type
     Type: String
     Default: t2.micro
+  ServerDomain:
+    Description: Server domain
+    Type: String
+  ServerPort:
+    Description: Server port
+    Type: Number
+    Default: 25565
 
 Mappings:
   AMI:
@@ -124,6 +138,18 @@ Resources:
       InstanceProfileName: !Sub ${AWS::StackName}-InstanceProfile
       Roles:
         - !Ref InstanceRole
+  GeyserSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub ${AWS::StackName}-GeyserSecurityGroup
+      GroupDescription: Allow incoming connections to Geyser proxy from given ClientIP
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - Description: Geyser proxy
+          IpProtocol: udp
+          FromPort: !Ref GeyserPort
+          ToPort: !Ref GeyserPort
+          CidrIp: !Sub ${ClientIP}/32
   Instance:
     Type: AWS::EC2::Instance
     Properties:
@@ -131,6 +157,8 @@ Resources:
       InstanceType: !Ref InstanceType
       IamInstanceProfile: !Ref InstanceProfile
       SubnetId: !Ref PublicSubnet
+      SecurityGroupIds:
+        - !GetAtt GeyserSecurityGroup.GroupId
       UserData:
         Fn::Base64: !Sub |
           #!/bin/bash -xe
@@ -206,7 +234,7 @@ Resources:
               content: !Sub |
                 #!/bin/sh
                 cd "$( dirname "$0" )"
-                java -Xms1024M -jar Geyser.jar
+                java -Xms1024M -jar Geyser.jar --bedrock.port=${GeyserPort} --remote.address=${ServerDomain} --remote.port=${ServerPort}
               mode: '000744'
               owner: root
               group: root
@@ -215,3 +243,6 @@ Outputs:
   ProxyInstanceId:
     Description: InstanceId of the newly created EC2 instance
     Value: !Ref Instance
+  GeyserIpPort:
+    Description: Ip:Port of the newly created Geyser proxy
+    Value: !Sub ${Instance.PublicIp}:${GeyserPort}
