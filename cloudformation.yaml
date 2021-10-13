@@ -150,6 +150,18 @@ Resources:
           FromPort: !Ref GeyserPort
           ToPort: !Ref GeyserPort
           CidrIp: !Sub ${ClientIP}/32
+  HAProxySecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub ${AWS::StackName}-HAProxySecurityGroup
+      GroupDescription: Allow incoming connections to HAProxy from given ClientIP
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - Description: HAProxy
+          IpProtocol: tcp
+          FromPort: !Ref ServerPort
+          ToPort: !Ref ServerPort
+          CidrIp: !Sub ${ClientIP}/32
   Instance:
     Type: AWS::EC2::Instance
     Properties:
@@ -159,6 +171,7 @@ Resources:
       SubnetId: !Ref PublicSubnet
       SecurityGroupIds:
         - !GetAtt GeyserSecurityGroup.GroupId
+        - !GetAtt HAProxySecurityGroup.GroupId
       UserData:
         Fn::Base64: !Sub |
           #!/bin/bash -xe
@@ -194,6 +207,8 @@ Resources:
               command: systemctl enable geyser.service
             06_start_geyser:
               command: systemctl start geyser.service
+            07_install_haproxy:
+              command: apt-get --yes --force-yes -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" install haproxy
           files:
             /etc/cfn/cfn-hup.conf:
               content: !Sub |
@@ -201,6 +216,24 @@ Resources:
                 stack=${AWS::StackId}
                 region=${AWS::Region}
                 interval=1
+              mode: '000400'
+              owner: root
+              group: root
+            /etc/haproxy/haproxy.cfg:
+              content: !Sub |
+                global
+                  log stdout format raw local0 info
+                defaults
+                  mode tcp
+                  timeout client 10s
+                  timeout connect 5s
+                  timeout server 10s
+                  log global
+                frontend my_frontend
+                  bind :${ServerPort}
+                  default_backend my_backend
+                backend my_backend
+                  server my_server ${ServerDomain}:${ServerPort} check
               mode: '000400'
               owner: root
               group: root
@@ -246,3 +279,6 @@ Outputs:
   GeyserIpPort:
     Description: Ip:Port of the newly created Geyser proxy
     Value: !Sub ${Instance.PublicIp}:${GeyserPort}
+  HAProxyIpPort:
+    Description: Ip:Port of the newly created HAProxy
+    Value: !Sub ${Instance.PublicIp}:${ServerPort}
