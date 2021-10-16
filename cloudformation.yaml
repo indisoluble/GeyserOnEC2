@@ -1,0 +1,461 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: Global accelerator to GeyseMC proxy in any region
+
+Parameters:
+  CIDR:
+    Description: Subnet IP range
+    Type: String
+    Default: 10.0.0.0/28
+  ClientIP:
+    Description: Client IP
+    Type: String
+  GeyserPort:
+    Description: Proxy port
+    Type: Number
+    Default: 19132
+  InstanceType:
+    Description: EC2 instance type
+    Type: String
+    Default: t2.micro
+  ServerDomain:
+    Description: Server domain
+    Type: String
+  ServerPort:
+    Description: Server port
+    Type: Number
+    Default: 25565
+
+Mappings:
+  AMI:
+    ap-northeast-1:
+      Ubuntu2004LTS: ami-02a56e430b32bc0ba
+    ap-northeast-2:
+      Ubuntu2004LTS: ami-0cceb8e71553d73f0
+    ap-northeast-3:
+      Ubuntu2004LTS: ami-0c2a318a1451b5e04
+    ap-south-1:
+      Ubuntu2004LTS: ami-01ad2fc4607cc742e
+    ap-southeast-1:
+      Ubuntu2004LTS: ami-072466d111bc68d81
+    ap-southeast-2:
+      Ubuntu2004LTS: ami-0606a3915440b2b72
+    ca-central-1:
+      Ubuntu2004LTS: ami-07e39d7bd85085b96
+    eu-central-1:
+      Ubuntu2004LTS: ami-0afc0414aefc9eaa7
+    eu-north-1:
+      Ubuntu2004LTS: ami-0aacae1c06b3c30a0
+    eu-west-1:
+      Ubuntu2004LTS: ami-0c1aea1d6f3bdd76b
+    eu-west-2:
+      Ubuntu2004LTS: ami-00f314baca4922fe3
+    eu-west-3:
+      Ubuntu2004LTS: ami-021a18be6333356c7
+    sa-east-1:
+      Ubuntu2004LTS: ami-0a62c6929da4659cb
+    us-east-1:
+      Ubuntu2004LTS: ami-089b5711e63812c2a
+    us-east-2:
+      Ubuntu2004LTS: ami-0ac4906b9504bec77
+    us-west-1:
+      Ubuntu2004LTS: ami-04b8a53b12fd66ba7
+    us-west-2:
+      Ubuntu2004LTS: ami-0f6970790b38613ef
+
+Resources:
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref CIDR
+      Tags:
+        - Key: Application
+          Value: !Ref AWS::StackName
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-VPC
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Application
+          Value: !Ref AWS::StackName
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-InternetGateway
+  VPCGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+  PublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Ref CIDR
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Application
+          Value: !Ref AWS::StackName
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-PublicSubnet
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Application
+          Value: !Ref AWS::StackName
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-PublicRouteTable
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: VPCGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+  PublicSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet
+      RouteTableId: !Ref PublicRouteTable
+  InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+  InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      InstanceProfileName: !Sub ${AWS::StackName}-InstanceProfile
+      Roles:
+        - !Ref InstanceRole
+  Route53HealthCheckersSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub ${AWS::StackName}-Route53HealthCheckersSecurityGroup
+      GroupDescription: Route53 health checker IPs
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - Description: GLOBAL
+          IpProtocol: tcp
+          FromPort: !Ref ServerPort
+          ToPort: !Ref ServerPort
+          CidrIp: 15.177.0.0/18
+        - Description: cn-north-1
+          IpProtocol: tcp
+          FromPort: !Ref ServerPort
+          ToPort: !Ref ServerPort
+          CidrIp: 52.80.197.0/25
+        - Description: cn-north-1
+          IpProtocol: tcp
+          FromPort: !Ref ServerPort
+          ToPort: !Ref ServerPort
+          CidrIp: 52.80.197.128/25
+        - Description: cn-north-1
+          IpProtocol: tcp
+          FromPort: !Ref ServerPort
+          ToPort: !Ref ServerPort
+          CidrIp: 52.80.198.0/25
+        - Description: cn-northwest-1
+          IpProtocol: tcp
+          FromPort: !Ref ServerPort
+          ToPort: !Ref ServerPort
+          CidrIp: 52.83.34.128/25
+        - Description: cn-northwest-1
+          IpProtocol: tcp
+          FromPort: !Ref ServerPort
+          ToPort: !Ref ServerPort
+          CidrIp: 52.83.35.0/25
+        - Description: cn-northwest-1
+          IpProtocol: tcp
+          FromPort: !Ref ServerPort
+          ToPort: !Ref ServerPort
+          CidrIp: 52.83.35.128/25
+        - Description: ap-northeast-1
+          IpProtocol: tcp
+          FromPort: !Ref ServerPort
+          ToPort: !Ref ServerPort
+          CidrIp: 54.248.220.0/26
+        - Description: ap-northeast-1
+          IpProtocol: tcp
+          FromPort: !Ref ServerPort
+          ToPort: !Ref ServerPort
+          CidrIp: 54.250.253.192/26
+        - Description: ap-southeast-1
+          IpProtocol: tcp
+          FromPort: !Ref ServerPort
+          ToPort: !Ref ServerPort
+          CidrIp: 54.251.31.128/26
+        - Description: ap-southeast-1
+          IpProtocol: tcp
+          FromPort: !Ref ServerPort
+          ToPort: !Ref ServerPort
+          CidrIp: 54.255.254.192/26
+        - Description: ap-southeast-2
+          IpProtocol: tcp
+          FromPort: !Ref ServerPort
+          ToPort: !Ref ServerPort
+          CidrIp: 54.252.254.192/26
+        - Description: ap-southeast-2
+          IpProtocol: tcp
+          FromPort: !Ref ServerPort
+          ToPort: !Ref ServerPort
+          CidrIp: 54.252.79.128/26
+        - Description: eu-west-1
+          IpProtocol: tcp
+          FromPort: !Ref ServerPort
+          ToPort: !Ref ServerPort
+          CidrIp: 176.34.159.192/26
+        - Description: eu-west-1
+          IpProtocol: tcp
+          FromPort: !Ref ServerPort
+          ToPort: !Ref ServerPort
+          CidrIp: 54.228.16.0/26
+        - Description: sa-east-1
+          IpProtocol: tcp
+          FromPort: !Ref ServerPort
+          ToPort: !Ref ServerPort
+          CidrIp: 177.71.207.128/26
+        - Description: sa-east-1
+          IpProtocol: tcp
+          FromPort: !Ref ServerPort
+          ToPort: !Ref ServerPort
+          CidrIp: 54.232.40.64/26
+        - Description: us-east-1
+          IpProtocol: tcp
+          FromPort: !Ref ServerPort
+          ToPort: !Ref ServerPort
+          CidrIp: 107.23.255.0/26
+        - Description: us-east-1
+          IpProtocol: tcp
+          FromPort: !Ref ServerPort
+          ToPort: !Ref ServerPort
+          CidrIp: 54.243.31.192/26
+        - Description: us-west-1
+          IpProtocol: tcp
+          FromPort: !Ref ServerPort
+          ToPort: !Ref ServerPort
+          CidrIp: 54.183.255.128/26
+        - Description: us-west-1
+          IpProtocol: tcp
+          FromPort: !Ref ServerPort
+          ToPort: !Ref ServerPort
+          CidrIp: 54.241.32.64/26
+        - Description: us-west-2
+          IpProtocol: tcp
+          FromPort: !Ref ServerPort
+          ToPort: !Ref ServerPort
+          CidrIp: 54.244.52.192/26
+        - Description: us-west-2
+          IpProtocol: tcp
+          FromPort: !Ref ServerPort
+          ToPort: !Ref ServerPort
+          CidrIp: 54.245.168.0/26
+      Tags:
+        - Key: Application
+          Value: !Ref AWS::StackName
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-Route53HealthCheckersSecurityGroup
+  GeyserSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub ${AWS::StackName}-GeyserSecurityGroup
+      GroupDescription: Allow incoming connections to Geyser proxy from given ClientIP
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - Description: Geyser proxy
+          IpProtocol: udp
+          FromPort: !Ref GeyserPort
+          ToPort: !Ref GeyserPort
+          CidrIp: !Sub ${ClientIP}/32
+  HAProxySecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub ${AWS::StackName}-HAProxySecurityGroup
+      GroupDescription: Allow incoming connections to HAProxy from given ClientIP
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - Description: HAProxy
+          IpProtocol: tcp
+          FromPort: !Ref ServerPort
+          ToPort: !Ref ServerPort
+          CidrIp: !Sub ${ClientIP}/32
+  Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !FindInMap [ AMI, !Ref AWS::Region, Ubuntu2004LTS ]
+      InstanceType: !Ref InstanceType
+      IamInstanceProfile: !Ref InstanceProfile
+      SubnetId: !Ref PublicSubnet
+      SecurityGroupIds:
+        - !GetAtt Route53HealthCheckersSecurityGroup.GroupId
+        - !GetAtt GeyserSecurityGroup.GroupId
+        - !GetAtt HAProxySecurityGroup.GroupId
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash -xe
+          apt-get --yes update
+          apt-get --yes upgrade
+          wget https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-py3-latest.tar.gz
+          mkdir -p /opt/aws/bin
+          python3 -m easy_install --script-dir /opt/aws/bin aws-cfn-bootstrap-py3-latest.tar.gz
+          /opt/aws/bin/cfn-init --verbose --region ${AWS::Region} --stack ${AWS::StackName} --resource Instance
+          /opt/aws/bin/cfn-signal --exit-code $? --region ${AWS::Region} --stack ${AWS::StackName} --resource Instance
+      Tags:
+        - Key: Application
+          Value: !Ref AWS::StackName
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-Instance
+    CreationPolicy:
+      ResourceSignal:
+        Count: 1
+        Timeout: PT15M
+    Metadata:
+      AWS::CloudFormation::Init:
+        config:
+          commands:
+            01_enable_cfn_hup:
+              command: systemctl enable cfn-hup.service
+            02_start_cfn_hup:
+              command: systemctl start cfn-hup.service
+            03_install_java:
+              command: apt-get --yes install openjdk-16-jre-headless
+            04_download_geyser:
+              command: wget https://ci.opencollab.dev/job/GeyserMC/job/Geyser/job/master/lastSuccessfulBuild/artifact/bootstrap/standalone/target/Geyser.jar -O /opt/geyser/Geyser.jar
+            05_enable_geyser:
+              command: systemctl enable geyser.service
+            06_start_geyser:
+              command: systemctl start geyser.service
+            07_install_haproxy:
+              command: apt-get --yes --force-yes -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" install haproxy
+          files:
+            /etc/cfn/cfn-hup.conf:
+              content: !Sub |
+                [main]
+                stack=${AWS::StackId}
+                region=${AWS::Region}
+                interval=1
+              mode: '000400'
+              owner: root
+              group: root
+            /etc/haproxy/haproxy.cfg:
+              content: !Sub |
+                global
+                  log stdout format raw local0 info
+                defaults
+                  mode tcp
+                  timeout client 10s
+                  timeout connect 5s
+                  timeout server 10s
+                  log global
+                frontend my_frontend
+                  bind :${ServerPort}
+                  default_backend my_backend
+                backend my_backend
+                  server my_server ${ServerDomain}:${ServerPort} check
+              mode: '000400'
+              owner: root
+              group: root
+            /lib/systemd/system/cfn-hup.service:
+              content: !Sub |
+                [Unit]
+                Description=cfn-hup daemon
+                [Service]
+                Type=simple
+                ExecStart=/opt/aws/bin/cfn-hup
+                Restart=always
+                [Install]
+                WantedBy=multi-user.target
+              mode: '000644'
+              owner: root
+              group: root
+            /lib/systemd/system/geyser.service:
+              content: !Sub |
+                [Unit]
+                Description=GeyserMC daemon
+                [Service]
+                Type=simple
+                ExecStart=/opt/geyser/run.sh
+                Restart=always
+                [Install]
+                WantedBy=multi-user.target
+              mode: '000644'
+              owner: root
+              group: root
+            /opt/geyser/run.sh:
+              content: !Sub |
+                #!/bin/sh
+                cd "$( dirname "$0" )"
+                java -Xms1024M -jar Geyser.jar --bedrock.port=${GeyserPort} --remote.address=${ServerDomain} --remote.port=${ServerPort}
+              mode: '000744'
+              owner: root
+              group: root
+  GlobalAccelerator:
+    Type: AWS::GlobalAccelerator::Accelerator
+    Properties:
+      Name: !Sub ${AWS::StackName}-GlobalAccelerator
+      Tags:
+        - Key: Application
+          Value: !Ref AWS::StackName
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-GlobalAccelerator
+  GlobalAcceleratorGeyserListener:
+    Type: AWS::GlobalAccelerator::Listener
+    Properties:
+      AcceleratorArn: !Ref GlobalAccelerator
+      Protocol: UDP
+      PortRanges:
+        - FromPort: !Ref GeyserPort
+          ToPort: !Ref GeyserPort
+  GlobalAcceleratorHAProxyListener:
+    Type: AWS::GlobalAccelerator::Listener
+    Properties:
+      AcceleratorArn: !Ref GlobalAccelerator
+      Protocol: TCP
+      PortRanges:
+        - FromPort: !Ref ServerPort
+          ToPort: !Ref ServerPort
+  GlobalAcceleratorGeyserEndpoint:
+    Type: AWS::GlobalAccelerator::EndpointGroup
+    Properties:
+      ListenerArn: !Ref GlobalAcceleratorGeyserListener
+      EndpointGroupRegion: !Ref AWS::Region
+      EndpointConfigurations:
+        - EndpointId: !Ref Instance
+      HealthCheckProtocol: TCP
+      HealthCheckPort: !Ref ServerPort
+  GlobalAcceleratorHAProxyEndpoint:
+    Type: AWS::GlobalAccelerator::EndpointGroup
+    Properties:
+      ListenerArn: !Ref GlobalAcceleratorHAProxyListener
+      EndpointGroupRegion: !Ref AWS::Region
+      EndpointConfigurations:
+        - EndpointId: !Ref Instance
+      HealthCheckProtocol: TCP
+      HealthCheckPort: !Ref ServerPort
+
+Outputs:
+  AcceleratedGeyser:
+    Description: Domain:Port of the newly created Geyser proxy
+    Value: !Sub ${GlobalAccelerator.DnsName}:${GeyserPort}
+  DirectGeyser:
+    Description: Ip:Port of the newly created Geyser proxy
+    Value: !Sub ${Instance.PublicIp}:${GeyserPort}
+  AcceleratedHAProxy:
+    Description: Domain:Port of the newly created HAProxy
+    Value: !Sub ${GlobalAccelerator.DnsName}:${ServerPort}
+  DirectHAProxy:
+    Description: Ip:Port of the newly created HAProxy
+    Value: !Sub ${Instance.PublicIp}:${ServerPort}
+  AWSInstanceId:
+    Description: InstanceId of the newly created EC2 instance
+    Value: !Ref Instance
