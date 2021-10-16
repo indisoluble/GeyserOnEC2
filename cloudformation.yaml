@@ -138,6 +138,133 @@ Resources:
       InstanceProfileName: !Sub ${AWS::StackName}-InstanceProfile
       Roles:
         - !Ref InstanceRole
+  Route53HealthCheckersSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub ${AWS::StackName}-Route53HealthCheckersSecurityGroup
+      GroupDescription: Route53 health checker IPs
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - Description: GLOBAL
+          IpProtocol: tcp
+          FromPort: !Ref ServerPort
+          ToPort: !Ref ServerPort
+          CidrIp: 15.177.0.0/18
+        - Description: cn-north-1
+          IpProtocol: tcp
+          FromPort: !Ref ServerPort
+          ToPort: !Ref ServerPort
+          CidrIp: 52.80.197.0/25
+        - Description: cn-north-1
+          IpProtocol: tcp
+          FromPort: !Ref ServerPort
+          ToPort: !Ref ServerPort
+          CidrIp: 52.80.197.128/25
+        - Description: cn-north-1
+          IpProtocol: tcp
+          FromPort: !Ref ServerPort
+          ToPort: !Ref ServerPort
+          CidrIp: 52.80.198.0/25
+        - Description: cn-northwest-1
+          IpProtocol: tcp
+          FromPort: !Ref ServerPort
+          ToPort: !Ref ServerPort
+          CidrIp: 52.83.34.128/25
+        - Description: cn-northwest-1
+          IpProtocol: tcp
+          FromPort: !Ref ServerPort
+          ToPort: !Ref ServerPort
+          CidrIp: 52.83.35.0/25
+        - Description: cn-northwest-1
+          IpProtocol: tcp
+          FromPort: !Ref ServerPort
+          ToPort: !Ref ServerPort
+          CidrIp: 52.83.35.128/25
+        - Description: ap-northeast-1
+          IpProtocol: tcp
+          FromPort: !Ref ServerPort
+          ToPort: !Ref ServerPort
+          CidrIp: 54.248.220.0/26
+        - Description: ap-northeast-1
+          IpProtocol: tcp
+          FromPort: !Ref ServerPort
+          ToPort: !Ref ServerPort
+          CidrIp: 54.250.253.192/26
+        - Description: ap-southeast-1
+          IpProtocol: tcp
+          FromPort: !Ref ServerPort
+          ToPort: !Ref ServerPort
+          CidrIp: 54.251.31.128/26
+        - Description: ap-southeast-1
+          IpProtocol: tcp
+          FromPort: !Ref ServerPort
+          ToPort: !Ref ServerPort
+          CidrIp: 54.255.254.192/26
+        - Description: ap-southeast-2
+          IpProtocol: tcp
+          FromPort: !Ref ServerPort
+          ToPort: !Ref ServerPort
+          CidrIp: 54.252.254.192/26
+        - Description: ap-southeast-2
+          IpProtocol: tcp
+          FromPort: !Ref ServerPort
+          ToPort: !Ref ServerPort
+          CidrIp: 54.252.79.128/26
+        - Description: eu-west-1
+          IpProtocol: tcp
+          FromPort: !Ref ServerPort
+          ToPort: !Ref ServerPort
+          CidrIp: 176.34.159.192/26
+        - Description: eu-west-1
+          IpProtocol: tcp
+          FromPort: !Ref ServerPort
+          ToPort: !Ref ServerPort
+          CidrIp: 54.228.16.0/26
+        - Description: sa-east-1
+          IpProtocol: tcp
+          FromPort: !Ref ServerPort
+          ToPort: !Ref ServerPort
+          CidrIp: 177.71.207.128/26
+        - Description: sa-east-1
+          IpProtocol: tcp
+          FromPort: !Ref ServerPort
+          ToPort: !Ref ServerPort
+          CidrIp: 54.232.40.64/26
+        - Description: us-east-1
+          IpProtocol: tcp
+          FromPort: !Ref ServerPort
+          ToPort: !Ref ServerPort
+          CidrIp: 107.23.255.0/26
+        - Description: us-east-1
+          IpProtocol: tcp
+          FromPort: !Ref ServerPort
+          ToPort: !Ref ServerPort
+          CidrIp: 54.243.31.192/26
+        - Description: us-west-1
+          IpProtocol: tcp
+          FromPort: !Ref ServerPort
+          ToPort: !Ref ServerPort
+          CidrIp: 54.183.255.128/26
+        - Description: us-west-1
+          IpProtocol: tcp
+          FromPort: !Ref ServerPort
+          ToPort: !Ref ServerPort
+          CidrIp: 54.241.32.64/26
+        - Description: us-west-2
+          IpProtocol: tcp
+          FromPort: !Ref ServerPort
+          ToPort: !Ref ServerPort
+          CidrIp: 54.244.52.192/26
+        - Description: us-west-2
+          IpProtocol: tcp
+          FromPort: !Ref ServerPort
+          ToPort: !Ref ServerPort
+          CidrIp: 54.245.168.0/26
+      Tags:
+        - Key: Application
+          Value: !Ref AWS::StackName
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-Route53HealthCheckersSecurityGroup
   GeyserSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -170,6 +297,7 @@ Resources:
       IamInstanceProfile: !Ref InstanceProfile
       SubnetId: !Ref PublicSubnet
       SecurityGroupIds:
+        - !GetAtt Route53HealthCheckersSecurityGroup.GroupId
         - !GetAtt GeyserSecurityGroup.GroupId
         - !GetAtt HAProxySecurityGroup.GroupId
       UserData:
@@ -271,14 +399,63 @@ Resources:
               mode: '000744'
               owner: root
               group: root
+  GlobalAccelerator:
+    Type: AWS::GlobalAccelerator::Accelerator
+    Properties:
+      Name: !Sub ${AWS::StackName}-GlobalAccelerator
+      Tags:
+        - Key: Application
+          Value: !Ref AWS::StackName
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-GlobalAccelerator
+  GlobalAcceleratorGeyserListener:
+    Type: AWS::GlobalAccelerator::Listener
+    Properties:
+      AcceleratorArn: !Ref GlobalAccelerator
+      Protocol: UDP
+      PortRanges:
+        - FromPort: !Ref GeyserPort
+          ToPort: !Ref GeyserPort
+  GlobalAcceleratorHAProxyListener:
+    Type: AWS::GlobalAccelerator::Listener
+    Properties:
+      AcceleratorArn: !Ref GlobalAccelerator
+      Protocol: TCP
+      PortRanges:
+        - FromPort: !Ref ServerPort
+          ToPort: !Ref ServerPort
+  GlobalAcceleratorGeyserEndpoint:
+    Type: AWS::GlobalAccelerator::EndpointGroup
+    Properties:
+      ListenerArn: !Ref GlobalAcceleratorGeyserListener
+      EndpointGroupRegion: !Ref AWS::Region
+      EndpointConfigurations:
+        - EndpointId: !Ref Instance
+      HealthCheckProtocol: TCP
+      HealthCheckPort: !Ref ServerPort
+  GlobalAcceleratorHAProxyEndpoint:
+    Type: AWS::GlobalAccelerator::EndpointGroup
+    Properties:
+      ListenerArn: !Ref GlobalAcceleratorHAProxyListener
+      EndpointGroupRegion: !Ref AWS::Region
+      EndpointConfigurations:
+        - EndpointId: !Ref Instance
+      HealthCheckProtocol: TCP
+      HealthCheckPort: !Ref ServerPort
 
 Outputs:
-  ProxyInstanceId:
-    Description: InstanceId of the newly created EC2 instance
-    Value: !Ref Instance
-  GeyserIpPort:
+  AcceleratedGeyser:
+    Description: Domain:Port of the newly created Geyser proxy
+    Value: !Sub ${GlobalAccelerator.DnsName}:${GeyserPort}
+  DirectGeyser:
     Description: Ip:Port of the newly created Geyser proxy
     Value: !Sub ${Instance.PublicIp}:${GeyserPort}
-  HAProxyIpPort:
+  AcceleratedHAProxy:
+    Description: Domain:Port of the newly created HAProxy
+    Value: !Sub ${GlobalAccelerator.DnsName}:${ServerPort}
+  DirectHAProxy:
     Description: Ip:Port of the newly created HAProxy
     Value: !Sub ${Instance.PublicIp}:${ServerPort}
+  AWSInstanceId:
+    Description: InstanceId of the newly created EC2 instance
+    Value: !Ref Instance
