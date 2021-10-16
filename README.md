@@ -15,6 +15,10 @@ You can use the Cloudformation file in this repository:
 * Also, to create a [Geyser proxy](https://geysermc.org/) in the destination region that will only accept connections from your computer and direct the traffic from your Bedrock client to the Java Minecraft server
 * And to enable [AWS Global Accelerator](https://aws.amazon.com/global-accelerator) to speed up your traffic to the proxies
 
+### Design
+
+![Design](/Images/Design.jpg?raw=true)
+
 ### Usage
 
 2 mandatory values to inform:
